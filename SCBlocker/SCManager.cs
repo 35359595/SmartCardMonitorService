@@ -1,9 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using PCSC;
+﻿using PCSC;
+using System;
+using System.Diagnostics;
 
 namespace SCBlocker
 {
@@ -21,22 +18,52 @@ namespace SCBlocker
             }
         }
 
+        private static void _writeLog(string Message)
+        {
+            string sSource = "SCManager";
+            string sLog = "Security";
+
+            if (!EventLog.SourceExists(sSource))
+                EventLog.CreateEventSource(sSource, sLog);
+
+            EventLog.WriteEntry(sSource, Message, EventLogEntryType.Information, 4800);
+        }
+
         private void _sCardRemoved(object sender, CardStatusEventArgs e)
         {
-            Console.WriteLine("Locking machine. SmartCard was removed.");
-            // LockWorkStation();
+            _writeLog(String.Format("Locking machine. SmartCard was removed from {0}.", e.ReaderName));
+            LockWorkStation();
         }
 
-        public void StartMonitoring()
-        {
-            _monitor.CardRemoved += new CardRemovedEvent(_sCardRemoved);
-            foreach (string reader in _readers)
-                _monitor.Start(reader);
+        private static void LockWorkStation() { //not working from the service :(
+            Process.Start("rundll32.exe", "user32.dll, LockWorkStation");
         }
 
-        public void StopMonitoring()
+        public bool StartMonitoring()
         {
-            _monitor = new SCardMonitor(ContextFactory.Instance, SCardScope.System);
+            try
+            {
+                _monitor.CardRemoved += new CardRemovedEvent(_sCardRemoved);
+                foreach (string reader in _readers)
+                    _monitor.Start(reader);
+                return true;
+            } catch (Exception e)
+            {
+                _writeLog(e.Message);
+                return false;
+            }
+        }
+
+        public bool StopMonitoring()
+        {
+            try
+            {
+                _monitor.Dispose();
+                return true;
+            } catch (Exception e) {
+                _writeLog(e.Message);
+                return false;
+            }
         }
     }
 }
